@@ -30,6 +30,15 @@ from web import db
 
 TIMEZONE = ZoneInfo("Europe/Copenhagen")
 TAB_MS = 5 * 60 * 1000
+PRICE_SCALE_MIN = Decimal("6")
+PRICE_GREEN_UNTIL = Decimal("2")
+PRICE_ORANGE_UNTIL = Decimal("4")
+USAGE_SCALE_MIN = Decimal("2")
+USAGE_GREEN_UNTIL = Decimal("1")
+USAGE_ORANGE_UNTIL = Decimal("2")
+SPENT_SCALE_MIN = Decimal("2")
+SPENT_GREEN_UNTIL = Decimal("1")
+SPENT_ORANGE_UNTIL = Decimal("2")
 
 CSS = """
 :root {
@@ -69,7 +78,10 @@ nav.tabs a.active { background: var(--ink); color: var(--bg); border-color: var(
   letter-spacing: 0; }
 .sub { color: var(--muted); margin: 0.15rem 0 0; font-size: clamp(0.85rem, 1.6vh, 1.05rem); }
 .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 0.8rem; flex: 1; min-height: 0; }
-@media (max-width: 800px) { .pair { grid-template-columns: 1fr; } }
+.trio { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.7rem; flex: 1; min-height: 0; }
+@media (max-width: 800px) {
+  .pair, .trio { grid-template-columns: 1fr; }
+}
 .card { background: var(--panel); border: 1px solid var(--line); border-radius: 1rem;
   padding: 0.55rem 0.7rem 0.5rem; display: flex; flex-direction: column; min-height: 0; }
 .card-title { flex: 0 0 auto; font-weight: 650; }
@@ -84,7 +96,13 @@ nav.tabs a.active { background: var(--ink); color: var(--bg); border-color: var(
 .row.now .hour { color: var(--ink); font-weight: 650; }
 .track { height: 58%; min-height: 4px; background: #2a241f; border-radius: 999px; overflow: hidden; }
 .fill { height: 100%; width: 100%;
-  background: linear-gradient(90deg, var(--low) 0%, var(--mid) 50%, var(--high) 100%);
+  background: linear-gradient(90deg,
+    var(--low) 0%,
+    var(--low) var(--g-green, 33.333%),
+    var(--mid) var(--g-green, 33.333%),
+    var(--mid) var(--g-orange, 66.667%),
+    var(--high) var(--g-orange, 66.667%),
+    var(--high) 100%);
   clip-path: inset(0 calc(100% - var(--w, 0%)) 0 0); }
 .row .val { text-align: right; font-variant-numeric: tabular-nums;
   font-size: clamp(0.62rem, 1.5vh, 0.85rem); font-weight: 650; }
@@ -92,7 +110,14 @@ nav.tabs a.active { background: var(--ink); color: var(--bg); border-color: var(
 .legend { flex: 0 0 auto; display: flex; align-items: center; gap: 0.55rem; color: var(--muted);
   font-size: 0.88rem; flex-wrap: wrap; }
 .legend-bar { width: 8rem; height: 0.5rem; border-radius: 999px;
-  background: linear-gradient(90deg, var(--low) 0%, var(--mid) 50%, var(--high) 100%); }
+  background: linear-gradient(90deg,
+    var(--low) 0%,
+    var(--low) var(--g-green, 33.333%),
+    var(--mid) var(--g-green, 33.333%),
+    var(--mid) var(--g-orange, 66.667%),
+    var(--high) var(--g-orange, 66.667%),
+    var(--high) 100%); }
+.panel-prices .legend-bar { width: 12rem; }
 .day-nav { flex: 0 0 auto; display: flex; justify-content: space-between; align-items: center;
   gap: 0.8rem; }
 .day-nav a, .day-nav .disabled { text-decoration: none; padding: 0.4rem 0.85rem;
@@ -176,7 +201,7 @@ def index(tab: str | None = None, day: str | None = None):
         None,
     )
     price_values = [item.total_incl_vat for item in today_hours + tomorrow_hours]
-    price_max = _max_decimal(price_values)
+    price_scale = _value_scale(price_values, PRICE_SCALE_MIN)
 
     usage_total = sum((item.usage_kwh for item in usage_hours), Decimal("0"))
     priced = [item.cost_dkk for item in usage_hours if item.cost_dkk is not None]
@@ -194,13 +219,16 @@ def index(tab: str | None = None, day: str | None = None):
                     [(fmt_kr(current.total_incl_vat) if current else "—", "kr/kWh")],
                     _current_caption(now, current),
                 ),
-                _legend(),
+                _price_legend(price_scale),
                 Div(
-                    _price_card("Today", today, today_hours, price_max, now),
-                    _price_card("Tomorrow", tomorrow, tomorrow_hours, price_max, None),
+                    _price_card("Today", today, today_hours, price_scale, now),
+                    _price_card("Tomorrow", tomorrow, tomorrow_hours, price_scale, None),
                     cls="pair",
                 ),
                 cls="panel panel-prices",
+                style=_gradient_style(
+                    price_scale, PRICE_GREEN_UNTIL, PRICE_ORANGE_UNTIL
+                ),
             ),
             Div(
                 _hero(
@@ -210,11 +238,11 @@ def index(tab: str | None = None, day: str | None = None):
                     ],
                     _usage_caption(usage_day, latest_usage, missing_price),
                 ),
-                _legend(),
                 Div(
                     _usage_card("Usage", usage_hours, "usage"),
+                    _usage_card("Price", usage_hours, "price"),
                     _usage_card("Spent", usage_hours, "cost"),
-                    cls="pair",
+                    cls="trio",
                 ),
                 _day_nav(usage_day, prev_usage, next_usage),
                 cls="panel panel-usage",
@@ -267,11 +295,12 @@ def _hero(items: list[tuple[str, str]], caption: str):
     )
 
 
-def _legend():
+def _price_legend(scale: Decimal):
     return Div(
-        Span("Low"),
+        Span("0"),
         Span(cls="legend-bar"),
-        Span("High"),
+        Span(f"{fmt_kr(scale)} kr"),
+        Span("·  0–2 green  ·  2–4 orange  ·  4+ red"),
         cls="legend",
     )
 
@@ -344,27 +373,44 @@ def _usage_card(title: str, hours: list[db.UsageHour], kind: str):
         )
     if kind == "cost":
         values = [item.cost_dkk for item in hours]
-        vmax = _max_decimal([item for item in values if item is not None])
+        scale = _value_scale(values, SPENT_SCALE_MIN)
+        green, orange = SPENT_GREEN_UNTIL, SPENT_ORANGE_UNTIL
         format_value = fmt_kr
+        caption = (
+            f"0–{fmt_kr(scale)} kr  ·  0–1 green  ·  1–2 orange  ·  2+ red"
+        )
+    elif kind == "price":
+        values = [item.price_incl_vat for item in hours]
+        scale = _value_scale(values, PRICE_SCALE_MIN)
+        green, orange = PRICE_GREEN_UNTIL, PRICE_ORANGE_UNTIL
+        format_value = fmt_kr
+        caption = (
+            f"0–{fmt_kr(scale)} kr/kWh  ·  0–2 green  ·  2–4 orange  ·  4+ red"
+        )
     else:
         values = [item.usage_kwh for item in hours]
-        vmax = _max_decimal(values)
+        scale = _value_scale(values, USAGE_SCALE_MIN)
+        green, orange = USAGE_GREEN_UNTIL, USAGE_ORANGE_UNTIL
         format_value = fmt_kwh
+        caption = (
+            f"0–{fmt_kwh(scale)} kWh  ·  0–1 green  ·  1–2 orange  ·  2+ red"
+        )
     rows = [
         _hour_row(
             hour=item.local_hour,
             value=value,
             shown=format_value(value) if value is not None else "—",
-            vmax=vmax,
+            vmax=scale,
             is_now=False,
         )
         for item, value in zip(hours, values)
     ]
     return Div(
         Div(title, cls="card-title"),
-        P("per hour", cls="when"),
+        P(caption, cls="when"),
         Div(*rows, cls="chart"),
         cls="card",
+        style=_gradient_style(scale, green, orange),
     )
 
 
@@ -412,10 +458,38 @@ def _parse_day(value: str | None) -> date | None:
 def _pct(value: Decimal, vmax: Decimal | None) -> int:
     if vmax is None or vmax <= 0:
         return 8
+    if value <= 0:
+        return 0
     pct = int((value / vmax * Decimal("100")).to_integral_value(rounding=ROUND_HALF_UP))
-    if value > 0:
-        return max(pct, 4)
-    return 0
+    return min(max(pct, 4), 100)
+
+
+def _value_scale(values: list[Decimal] | None, minimum: Decimal) -> Decimal:
+    vmax = _max_decimal(values)
+    if vmax is None or vmax <= minimum:
+        return minimum
+    return vmax
+
+
+def _stop_pct(amount: Decimal, scale: Decimal) -> str:
+    if scale <= 0:
+        return "0"
+    pct = (amount / scale * Decimal("100")).quantize(
+        Decimal("0.001"), rounding=ROUND_HALF_UP
+    )
+    if pct < 0:
+        pct = Decimal("0")
+    if pct > 100:
+        pct = Decimal("100")
+    return format(pct, "f")
+
+
+def _gradient_style(
+    scale: Decimal, green_until: Decimal, orange_until: Decimal
+) -> str:
+    green = _stop_pct(green_until, scale)
+    orange = _stop_pct(orange_until, scale)
+    return f"--g-green:{green}%;--g-orange:{orange}%"
 
 
 def _max_decimal(values: list[Decimal] | None) -> Decimal | None:
