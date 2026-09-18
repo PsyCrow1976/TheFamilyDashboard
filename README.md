@@ -22,7 +22,7 @@ Hourly spot prices in that database come from the open [Elpris API](https://www.
 Header: **The Family Dashboard**. Two tabs, rotated every five minutes (the page also reloads so the numbers stay current):
 
 1. **Current prices** — today’s and tomorrow’s total inkl. moms, as side-by-side 24-hour charts. Each hour is a horizontal line (`00-01` … `23-24`) with the value on the right. The line itself is a green → orange → red gradient (short stays green, long reaches red). The current hour is marked, and that hour’s price is shown large above the charts.
-2. **Power usage** — the latest date that has hourly usage (ElOverblik is usually a day behind). One chart is kWh per hour, the other is that hour’s usage times that hour’s stored price, same horizontal layout. Totals for the day sit above the charts.
+2. **Power usage** — the latest date that has hourly usage (ElOverblik is usually a day behind). One chart is kWh per hour, the other is that hour’s usage times that hour’s stored price, same horizontal layout. Totals for the day sit above the charts. Previous / next day buttons at the bottom step through stored usage days.
 
 ## Requirements
 
@@ -42,4 +42,4 @@ Unraid Docker Compose deploy is in [deploy.md](deploy.md).
 
 ## Status
 
-Version `0.0.3`. See [CHANGELOG.md](CHANGELOG.md).
+Version `0.0.4`. See [CHANGELOG.md](CHANGELOG.md).

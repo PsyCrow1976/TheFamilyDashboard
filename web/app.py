@@ -44,52 +44,64 @@ CSS = """
   --now: #f4efe6;
 }
 * { box-sizing: border-box; }
-html, body { margin: 0; min-height: 100%; background: var(--bg); color: var(--ink);
-  font-family: "Segoe UI", "Helvetica Neue", sans-serif; }
+html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink);
+  font-family: "Segoe UI", "Helvetica Neue", sans-serif; overflow: hidden; }
 body { padding: 0; }
 a { color: inherit; }
-.wrap { min-height: 100vh; display: flex; flex-direction: column; padding: 1.1rem 1.4rem 1.4rem; }
-header.top { display: flex; justify-content: space-between; align-items: end;
-  gap: 1rem; flex-wrap: wrap; border-bottom: 1px solid var(--line); padding-bottom: 0.8rem; }
-header.top h1 { margin: 0; font-size: clamp(1.6rem, 3vw, 2.4rem); letter-spacing: 0.02em; }
+.wrap { height: 100vh; height: 100dvh; display: flex; flex-direction: column;
+  padding: 0.8rem 1.2rem 0.9rem; }
+header.top { flex: 0 0 auto; display: flex; justify-content: space-between; align-items: end;
+  gap: 1rem; flex-wrap: wrap; border-bottom: 1px solid var(--line); padding-bottom: 0.65rem; }
+header.top h1 { margin: 0; font-size: clamp(1.4rem, 2.6vh, 2.2rem); letter-spacing: 0.02em; }
 nav.tabs { display: flex; gap: 0.5rem; }
-nav.tabs a { text-decoration: none; padding: 0.45rem 0.9rem; border-radius: 999px;
+nav.tabs a { text-decoration: none; padding: 0.4rem 0.85rem; border-radius: 999px;
   border: 1px solid var(--line); color: var(--muted); font-weight: 650; }
 nav.tabs a.active { background: var(--ink); color: var(--bg); border-color: var(--ink); }
-.panel { display: none; flex: 1; padding-top: 1.1rem; }
+.panels { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.panel { display: none; flex: 1; min-height: 0; padding-top: 0.7rem; }
 .wrap[data-tab="prices"] .panel-prices,
-.wrap[data-tab="usage"] .panel-usage { display: flex; flex-direction: column; gap: 1rem; }
-.hero { display: flex; flex-direction: column; gap: 0.2rem; }
+.wrap[data-tab="usage"] .panel-usage { display: flex; flex-direction: column; gap: 0.55rem; }
+.hero { flex: 0 0 auto; display: flex; flex-direction: column; gap: 0.1rem; }
 .hero .nums { display: flex; gap: 2.4rem; flex-wrap: wrap; align-items: baseline; }
-.big { font-size: clamp(2.4rem, 7vw, 5.2rem); font-weight: 750; line-height: 0.95;
+.big { font-size: clamp(1.7rem, 5.5vh, 4.2rem); font-weight: 750; line-height: 0.95;
   font-variant-numeric: tabular-nums; letter-spacing: -0.03em; }
 .big .unit { font-size: 0.32em; font-weight: 650; color: var(--muted); margin-left: 0.25rem;
   letter-spacing: 0; }
-.sub { color: var(--muted); margin: 0.25rem 0 0; font-size: 1.05rem; }
-.pair { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; flex: 1; min-height: 0; }
+.sub { color: var(--muted); margin: 0.15rem 0 0; font-size: clamp(0.85rem, 1.6vh, 1.05rem); }
+.pair { display: grid; grid-template-columns: 1fr 1fr; gap: 0.8rem; flex: 1; min-height: 0; }
 @media (max-width: 800px) { .pair { grid-template-columns: 1fr; } }
 .card { background: var(--panel); border: 1px solid var(--line); border-radius: 1rem;
-  padding: 0.8rem 0.85rem 0.65rem; display: flex; flex-direction: column; min-height: 0; }
-.card-title { font-weight: 650; }
-.card .when { color: var(--muted); margin: 0.1rem 0 0.55rem; font-size: 0.92rem; }
-.chart { display: flex; flex-direction: column; gap: 0.18rem; }
-.row { display: grid; grid-template-columns: 3.6rem minmax(0, 1fr) 3.6rem;
-  align-items: center; gap: 0.45rem; padding: 0.08rem 0.2rem; border-radius: 0.35rem; }
+  padding: 0.55rem 0.7rem 0.5rem; display: flex; flex-direction: column; min-height: 0; }
+.card-title { flex: 0 0 auto; font-weight: 650; }
+.card .when { flex: 0 0 auto; color: var(--muted); margin: 0.05rem 0 0.35rem; font-size: 0.88rem; }
+.chart { display: flex; flex-direction: column; flex: 1; min-height: 0; gap: 0.08rem; }
+.row { display: grid; grid-template-columns: 3.4rem minmax(0, 1fr) 3.4rem;
+  align-items: center; gap: 0.4rem; padding: 0 0.15rem; border-radius: 0.3rem;
+  flex: 1 1 0; min-height: 0; }
 .row.now { background: #2c2620; outline: 1px solid var(--now); }
-.row .hour { color: var(--muted); font-variant-numeric: tabular-nums; font-size: 0.82rem; }
+.row .hour { color: var(--muted); font-variant-numeric: tabular-nums;
+  font-size: clamp(0.62rem, 1.5vh, 0.85rem); }
 .row.now .hour { color: var(--ink); font-weight: 650; }
-.track { height: 0.72rem; background: #2a241f; border-radius: 999px; overflow: hidden; }
+.track { height: 58%; min-height: 4px; background: #2a241f; border-radius: 999px; overflow: hidden; }
 .fill { height: 100%; width: 100%;
   background: linear-gradient(90deg, var(--low) 0%, var(--mid) 50%, var(--high) 100%);
   clip-path: inset(0 calc(100% - var(--w, 0%)) 0 0); }
-.row .val { text-align: right; font-variant-numeric: tabular-nums; font-size: 0.82rem;
-  font-weight: 650; }
+.row .val { text-align: right; font-variant-numeric: tabular-nums;
+  font-size: clamp(0.62rem, 1.5vh, 0.85rem); font-weight: 650; }
 .empty-msg { color: var(--muted); margin: auto 0; }
-.legend { display: flex; align-items: center; gap: 0.55rem; color: var(--muted);
-  font-size: 0.9rem; flex-wrap: wrap; }
-.legend-bar { width: 8rem; height: 0.55rem; border-radius: 999px;
+.legend { flex: 0 0 auto; display: flex; align-items: center; gap: 0.55rem; color: var(--muted);
+  font-size: 0.88rem; flex-wrap: wrap; }
+.legend-bar { width: 8rem; height: 0.5rem; border-radius: 999px;
   background: linear-gradient(90deg, var(--low) 0%, var(--mid) 50%, var(--high) 100%); }
-.warn { background: #3a2a1c; border: 1px solid #7a5a32; border-radius: 0.7rem; padding: 0.8rem 1rem; }
+.day-nav { flex: 0 0 auto; display: flex; justify-content: space-between; align-items: center;
+  gap: 0.8rem; }
+.day-nav a, .day-nav .disabled { text-decoration: none; padding: 0.4rem 0.85rem;
+  border-radius: 999px; font-weight: 650; border: 1px solid var(--line); }
+.day-nav a:hover { border-color: var(--ink); }
+.day-nav .disabled { color: #6a635a; border-color: transparent; }
+.day-nav .current { color: var(--muted); font-variant-numeric: tabular-nums; }
+.warn { flex: 0 0 auto; background: #3a2a1c; border: 1px solid #7a5a32;
+  border-radius: 0.7rem; padding: 0.7rem 1rem; }
 """
 
 JS = f"""
@@ -104,7 +116,10 @@ JS = f"""
       document.querySelectorAll("nav.tabs a").forEach((item) => {{
         item.classList.toggle("active", item.dataset.tab === tab);
       }});
-      history.replaceState(null, "", "/?tab=" + tab);
+      const params = new URLSearchParams(location.search);
+      params.set("tab", tab);
+      if (tab !== "usage") params.delete("day");
+      history.replaceState(null, "", "/?" + params.toString());
     }});
   }});
   setTimeout(() => {{
@@ -128,7 +143,7 @@ def health() -> PlainTextResponse:
 
 
 @rt("/")
-def index(tab: str | None = None):
+def index(tab: str | None = None, day: str | None = None):
     chosen = "usage" if tab == "usage" else "prices"
     now = datetime.now(TIMEZONE)
     today = now.date()
@@ -138,12 +153,17 @@ def index(tab: str | None = None):
     tomorrow_hours: list[db.PriceHour] = []
     usage_hours: list[db.UsageHour] = []
     usage_day: date | None = None
+    latest_usage: date | None = None
+    prev_usage: date | None = None
+    next_usage: date | None = None
     try:
         today_hours = db.list_price_hours(today)
         tomorrow_hours = db.list_price_hours(tomorrow)
-        usage_day = db.latest_usage_date()
+        latest_usage = db.latest_usage_date()
+        usage_day = _parse_day(day) or latest_usage
         if usage_day:
             usage_hours = db.list_usage_hours(usage_day)
+            prev_usage, next_usage = db.neighboring_usage_dates(usage_day)
     except Exception as exc:
         error = str(exc)
 
@@ -188,7 +208,7 @@ def index(tab: str | None = None):
                         (fmt_kwh(usage_total) if usage_hours else "—", "kWh"),
                         (fmt_kr(cost_total) if cost_total is not None else "—", "kr"),
                     ],
-                    _usage_caption(usage_day, missing_price),
+                    _usage_caption(usage_day, latest_usage, missing_price),
                 ),
                 _legend(),
                 Div(
@@ -196,8 +216,10 @@ def index(tab: str | None = None):
                     _usage_card("Spent", usage_hours, "cost"),
                     cls="pair",
                 ),
+                _day_nav(usage_day, prev_usage, next_usage),
                 cls="panel panel-usage",
             ),
+            cls="panels",
         )
     )
     return (
@@ -251,6 +273,27 @@ def _legend():
         Span(cls="legend-bar"),
         Span("High"),
         cls="legend",
+    )
+
+
+def _day_nav(day: date | None, prev_day: date | None, next_day: date | None):
+    if day is None:
+        return None
+    back = (
+        A("← Previous day", href=f"/?tab=usage&day={prev_day.isoformat()}")
+        if prev_day
+        else Span("← Previous day", cls="disabled")
+    )
+    forward = (
+        A("Next day →", href=f"/?tab=usage&day={next_day.isoformat()}")
+        if next_day
+        else Span("Next day →", cls="disabled")
+    )
+    return Div(
+        back,
+        Span(fmt_day(day), cls="current"),
+        forward,
+        cls="day-nav",
     )
 
 
@@ -349,11 +392,21 @@ def _current_caption(now: datetime, current: db.PriceHour | None) -> str:
     return f"This hour  {window}  ·  {fmt_day(now.date())}"
 
 
-def _usage_caption(day: date | None, missing_price: bool) -> str:
+def _usage_caption(day: date | None, latest: date | None, missing_price: bool) -> str:
     if day is None:
         return "No usage stored yet"
     extra = "  ·  some hours have no matching price" if missing_price else ""
-    return f"Latest day with usage  {fmt_day(day)}{extra}"
+    label = "Latest day with usage" if latest and day == latest else "Usage"
+    return f"{label}  {fmt_day(day)}{extra}"
+
+
+def _parse_day(value: str | None) -> date | None:
+    if not value:
+        return None
+    try:
+        return date.fromisoformat(value)
+    except ValueError:
+        return None
 
 
 def _pct(value: Decimal, vmax: Decimal | None) -> int:

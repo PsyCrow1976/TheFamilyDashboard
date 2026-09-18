@@ -102,6 +102,33 @@ def latest_usage_date(metering_point_id: str | None = None) -> date | None:
     return row["latest"] if row else None
 
 
+def neighboring_usage_dates(
+    day: date,
+    metering_point_id: str | None = None,
+) -> tuple[date | None, date | None]:
+    meter = metering_point_id or any_meter_id()
+    if meter is None:
+        return None, None
+    with connect() as conn:
+        row = conn.execute(
+            """
+            SELECT
+                (
+                    SELECT MAX(local_date) FROM eloverblick.hours
+                    WHERE metering_point_id = %s AND local_date < %s
+                ) AS prev_day,
+                (
+                    SELECT MIN(local_date) FROM eloverblick.hours
+                    WHERE metering_point_id = %s AND local_date > %s
+                ) AS next_day
+            """,
+            (meter, day, meter, day),
+        ).fetchone()
+    if row is None:
+        return None, None
+    return row["prev_day"], row["next_day"]
+
+
 def list_usage_hours(
     day: date,
     metering_point_id: str | None = None,

@@ -5,6 +5,16 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.0.4] - 2026-09-18
+
+### Changed
+
+- Hour rows stretch to fill leftover browser height, so the bar thickness grows with the window the same way bar length follows the value.
+
+### Added
+
+- Previous / next day buttons under the power usage charts, limited to days that have stored hourly usage.
+
 ## [0.0.3] - 2026-09-18
 
 ### Changed
