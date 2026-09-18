@@ -79,20 +79,16 @@ nav.tabs a.active { background: var(--ink); color: var(--bg); border-color: var(
 .row .hour { color: var(--muted); font-variant-numeric: tabular-nums; font-size: 0.82rem; }
 .row.now .hour { color: var(--ink); font-weight: 650; }
 .track { height: 0.72rem; background: #2a241f; border-radius: 999px; overflow: hidden; }
-.fill { height: 100%; border-radius: 999px; min-width: 0; }
-.fill.low { background: var(--low); }
-.fill.mid { background: var(--mid); }
-.fill.high { background: var(--high); }
-.fill.empty { background: #2a241f; width: 0; }
+.fill { height: 100%; width: 100%;
+  background: linear-gradient(90deg, var(--low) 0%, var(--mid) 50%, var(--high) 100%);
+  clip-path: inset(0 calc(100% - var(--w, 0%)) 0 0); }
 .row .val { text-align: right; font-variant-numeric: tabular-nums; font-size: 0.82rem;
   font-weight: 650; }
 .empty-msg { color: var(--muted); margin: auto 0; }
-.legend { display: flex; gap: 1rem; color: var(--muted); font-size: 0.9rem; flex-wrap: wrap; }
-.dot { display: inline-block; width: 0.75rem; height: 0.75rem; border-radius: 2px;
-  margin-right: 0.35rem; vertical-align: -1px; }
-.dot.low { background: var(--low); }
-.dot.mid { background: var(--mid); }
-.dot.high { background: var(--high); }
+.legend { display: flex; align-items: center; gap: 0.55rem; color: var(--muted);
+  font-size: 0.9rem; flex-wrap: wrap; }
+.legend-bar { width: 8rem; height: 0.55rem; border-radius: 999px;
+  background: linear-gradient(90deg, var(--low) 0%, var(--mid) 50%, var(--high) 100%); }
 .warn { background: #3a2a1c; border: 1px solid #7a5a32; border-radius: 0.7rem; padding: 0.8rem 1rem; }
 """
 
@@ -161,7 +157,6 @@ def index(tab: str | None = None):
     )
     price_values = [item.total_incl_vat for item in today_hours + tomorrow_hours]
     price_max = _max_decimal(price_values)
-    price_min = _min_decimal(price_values)
 
     usage_total = sum((item.usage_kwh for item in usage_hours), Decimal("0"))
     priced = [item.cost_dkk for item in usage_hours if item.cost_dkk is not None]
@@ -179,10 +174,10 @@ def index(tab: str | None = None):
                     [(fmt_kr(current.total_incl_vat) if current else "—", "kr/kWh")],
                     _current_caption(now, current),
                 ),
-                _legend("Cheap", "Mid", "Expensive"),
+                _legend(),
                 Div(
-                    _price_card("Today", today, today_hours, price_min, price_max, now),
-                    _price_card("Tomorrow", tomorrow, tomorrow_hours, price_min, price_max, None),
+                    _price_card("Today", today, today_hours, price_max, now),
+                    _price_card("Tomorrow", tomorrow, tomorrow_hours, price_max, None),
                     cls="pair",
                 ),
                 cls="panel panel-prices",
@@ -195,7 +190,7 @@ def index(tab: str | None = None):
                     ],
                     _usage_caption(usage_day, missing_price),
                 ),
-                _legend("Low", "Mid", "High"),
+                _legend(),
                 Div(
                     _usage_card("Usage", usage_hours, "usage"),
                     _usage_card("Spent", usage_hours, "cost"),
@@ -250,11 +245,11 @@ def _hero(items: list[tuple[str, str]], caption: str):
     )
 
 
-def _legend(low: str, mid: str, high: str):
+def _legend():
     return Div(
-        Span(Span(cls="dot low"), " ", low),
-        Span(Span(cls="dot mid"), " ", mid),
-        Span(Span(cls="dot high"), " ", high),
+        Span("Low"),
+        Span(cls="legend-bar"),
+        Span("High"),
         cls="legend",
     )
 
@@ -263,7 +258,6 @@ def _price_card(
     title: str,
     day: date,
     hours: list[db.PriceHour],
-    vmin: Decimal | None,
     vmax: Decimal | None,
     now: datetime | None,
 ):
@@ -285,7 +279,6 @@ def _price_card(
             hour=item.local_hour,
             value=item.total_incl_vat,
             shown=fmt_kr(item.total_incl_vat),
-            vmin=vmin,
             vmax=vmax,
             is_now=current_hour is not None and item.local_hour == current_hour,
         )
@@ -309,19 +302,16 @@ def _usage_card(title: str, hours: list[db.UsageHour], kind: str):
     if kind == "cost":
         values = [item.cost_dkk for item in hours]
         vmax = _max_decimal([item for item in values if item is not None])
-        vmin = _min_decimal([item for item in values if item is not None])
         format_value = fmt_kr
     else:
         values = [item.usage_kwh for item in hours]
         vmax = _max_decimal(values)
-        vmin = _min_decimal(values)
         format_value = fmt_kwh
     rows = [
         _hour_row(
             hour=item.local_hour,
             value=value,
             shown=format_value(value) if value is not None else "—",
-            vmin=vmin,
             vmax=vmax,
             is_now=False,
         )
@@ -340,20 +330,13 @@ def _hour_row(
     hour: int,
     value: Decimal | None,
     shown: str,
-    vmin: Decimal | None,
     vmax: Decimal | None,
     is_now: bool,
 ):
-    if value is None:
-        fill = Div(cls="fill empty")
-    else:
-        fill = Div(
-            cls="fill " + _band(value, vmin, vmax),
-            style=f"width:{_pct(value, vmax)}%",
-        )
+    pct = 0 if value is None else _pct(value, vmax)
     return Div(
         Span(fmt_hour_range(hour), cls="hour"),
-        Div(fill, cls="track"),
+        Div(Div(cls="fill"), cls="track", style=f"--w:{pct}%"),
         Span(shown, cls="val"),
         cls="row now" if is_now else "row",
     )
@@ -373,18 +356,6 @@ def _usage_caption(day: date | None, missing_price: bool) -> str:
     return f"Latest day with usage  {fmt_day(day)}{extra}"
 
 
-def _band(value: Decimal, vmin: Decimal | None, vmax: Decimal | None) -> str:
-    if vmin is None or vmax is None or vmax <= vmin:
-        return "mid"
-    span = vmax - vmin
-    t = (value - vmin) / span
-    if t <= Decimal("0.333333"):
-        return "low"
-    if t >= Decimal("0.666667"):
-        return "high"
-    return "mid"
-
-
 def _pct(value: Decimal, vmax: Decimal | None) -> int:
     if vmax is None or vmax <= 0:
         return 8
@@ -397,11 +368,6 @@ def _pct(value: Decimal, vmax: Decimal | None) -> int:
 def _max_decimal(values: list[Decimal] | None) -> Decimal | None:
     nums = [item for item in (values or []) if item is not None]
     return max(nums) if nums else None
-
-
-def _min_decimal(values: list[Decimal] | None) -> Decimal | None:
-    nums = [item for item in (values or []) if item is not None]
-    return min(nums) if nums else None
 
 
 def fmt_kr(value: Decimal | float | None) -> str:
