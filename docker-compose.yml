@@ -1,0 +1,34 @@
+services:
+  web:
+    build: .
+    container_name: thefamilydashboard
+    restart: unless-stopped
+    ports:
+      - "8089:8089"
+    env_file:
+      - .env
+    environment:
+      WEB_HOST: "0.0.0.0"
+      WEB_PORT: "8089"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8089/health')",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    networks:
+      - home
+    labels:
+      net.unraid.docker.webui: "http://[IP]:[PORT:8089]"
+      net.unraid.docker.description: "Family electricity dashboard"
+
+networks:
+  home:
+    name: home
+    external: true
