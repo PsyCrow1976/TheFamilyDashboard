@@ -69,23 +69,23 @@ nav.tabs a.active { background: var(--ink); color: var(--bg); border-color: var(
 .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; flex: 1; min-height: 0; }
 @media (max-width: 800px) { .pair { grid-template-columns: 1fr; } }
 .card { background: var(--panel); border: 1px solid var(--line); border-radius: 1rem;
-  padding: 0.9rem 0.9rem 0.7rem; display: flex; flex-direction: column; min-height: 18rem; }
-.card h2 { margin: 0 0 0.15rem; font-size: 1.05rem; }
-.card .when { color: var(--muted); margin: 0 0 0.7rem; font-size: 0.92rem; }
-.chart { display: flex; flex-direction: column; flex: 1; min-height: 14rem; }
-.markers { display: flex; height: 1.1rem; }
-.markers span { flex: 1; text-align: center; font-size: 0.85rem; line-height: 1; }
-.markers .now-mark { color: var(--now); }
-.bars { display: flex; align-items: flex-end; gap: 3px; flex: 1; min-height: 11rem; }
-.bar { flex: 1; min-width: 0; border-radius: 4px 4px 0 0; min-height: 2px; position: relative; }
-.bar.low { background: var(--low); }
-.bar.mid { background: var(--mid); }
-.bar.high { background: var(--high); }
-.bar.empty { background: #2a241f; min-height: 2px; }
-.bar.now { outline: 2px solid var(--now); outline-offset: 1px; }
-.hours { display: flex; margin-top: 0.35rem; color: var(--muted); font-variant-numeric: tabular-nums;
-  font-size: 0.75rem; }
-.hours span { flex: 1; text-align: center; }
+  padding: 0.8rem 0.85rem 0.65rem; display: flex; flex-direction: column; min-height: 0; }
+.card-title { font-weight: 650; }
+.card .when { color: var(--muted); margin: 0.1rem 0 0.55rem; font-size: 0.92rem; }
+.chart { display: flex; flex-direction: column; gap: 0.18rem; }
+.row { display: grid; grid-template-columns: 3.6rem minmax(0, 1fr) 3.6rem;
+  align-items: center; gap: 0.45rem; padding: 0.08rem 0.2rem; border-radius: 0.35rem; }
+.row.now { background: #2c2620; outline: 1px solid var(--now); }
+.row .hour { color: var(--muted); font-variant-numeric: tabular-nums; font-size: 0.82rem; }
+.row.now .hour { color: var(--ink); font-weight: 650; }
+.track { height: 0.72rem; background: #2a241f; border-radius: 999px; overflow: hidden; }
+.fill { height: 100%; border-radius: 999px; min-width: 0; }
+.fill.low { background: var(--low); }
+.fill.mid { background: var(--mid); }
+.fill.high { background: var(--high); }
+.fill.empty { background: #2a241f; width: 0; }
+.row .val { text-align: right; font-variant-numeric: tabular-nums; font-size: 0.82rem;
+  font-weight: 650; }
 .empty-msg { color: var(--muted); margin: auto 0; }
 .legend { display: flex; gap: 1rem; color: var(--muted); font-size: 0.9rem; flex-wrap: wrap; }
 .dot { display: inline-block; width: 0.75rem; height: 0.75rem; border-radius: 2px;
@@ -274,39 +274,27 @@ def _price_card(
             else "No prices stored for this date."
         )
         return Div(
-            Div(title, style="font-weight:650"),
+            Div(title, cls="card-title"),
             P(fmt_day(day), cls="when"),
             P(message, cls="empty-msg"),
             cls="card",
         )
     current_hour = now.hour if now and now.date() == day else None
-    bars = []
-    markers = []
-    labels = []
-    for item in hours:
-        is_now = current_hour is not None and item.local_hour == current_hour
-        pct = _pct(item.total_incl_vat, vmax)
-        klass = "bar " + _band(item.total_incl_vat, vmin, vmax)
-        if is_now:
-            klass += " now"
-        bars.append(
-            Div(
-                cls=klass,
-                style=f"height:{pct}%",
-                title=f"{item.local_hour:02d}:00  {fmt_kr(item.total_incl_vat)} kr/kWh",
-            )
+    rows = [
+        _hour_row(
+            hour=item.local_hour,
+            value=item.total_incl_vat,
+            shown=fmt_kr(item.total_incl_vat),
+            vmin=vmin,
+            vmax=vmax,
+            is_now=current_hour is not None and item.local_hour == current_hour,
         )
-        markers.append(Span("▼" if is_now else "", cls="now-mark" if is_now else None))
-        labels.append(Span(f"{item.local_hour:02d}" if item.local_hour % 3 == 0 else ""))
+        for item in hours
+    ]
     return Div(
-        Div(title, style="font-weight:650"),
+        Div(title, cls="card-title"),
         P(fmt_day(day), cls="when"),
-        Div(
-            Div(*markers, cls="markers"),
-            Div(*bars, cls="bars"),
-            Div(*labels, cls="hours"),
-            cls="chart",
-        ),
+        Div(*rows, cls="chart"),
         cls="card",
     )
 
@@ -314,7 +302,7 @@ def _price_card(
 def _usage_card(title: str, hours: list[db.UsageHour], kind: str):
     if not hours:
         return Div(
-            Div(title, style="font-weight:650"),
+            Div(title, cls="card-title"),
             P("No hourly usage stored yet.", cls="empty-msg"),
             cls="card",
         )
@@ -322,42 +310,57 @@ def _usage_card(title: str, hours: list[db.UsageHour], kind: str):
         values = [item.cost_dkk for item in hours]
         vmax = _max_decimal([item for item in values if item is not None])
         vmin = _min_decimal([item for item in values if item is not None])
+        format_value = fmt_kr
     else:
         values = [item.usage_kwh for item in hours]
         vmax = _max_decimal(values)
         vmin = _min_decimal(values)
-    bars = []
-    labels = []
-    for item, value in zip(hours, values):
-        if value is None:
-            bars.append(Div(cls="bar empty", title=f"{item.local_hour:02d}:00  no price"))
-        else:
-            pct = _pct(value, vmax)
-            unit = "kr" if kind == "cost" else "kWh"
-            shown = fmt_kr(value) if kind == "cost" else fmt_kwh(value)
-            klass = "bar " + _band(value, vmin, vmax)
-            bars.append(
-                Div(
-                    cls=klass,
-                    style=f"height:{pct}%",
-                    title=f"{item.local_hour:02d}:00  {shown} {unit}",
-                )
-            )
-        labels.append(Span(f"{item.local_hour:02d}" if item.local_hour % 3 == 0 else ""))
+        format_value = fmt_kwh
+    rows = [
+        _hour_row(
+            hour=item.local_hour,
+            value=value,
+            shown=format_value(value) if value is not None else "—",
+            vmin=vmin,
+            vmax=vmax,
+            is_now=False,
+        )
+        for item, value in zip(hours, values)
+    ]
     return Div(
-        Div(title, style="font-weight:650"),
+        Div(title, cls="card-title"),
         P("per hour", cls="when"),
-        Div(
-            Div(*bars, cls="bars"),
-            Div(*labels, cls="hours"),
-            cls="chart",
-        ),
+        Div(*rows, cls="chart"),
         cls="card",
     )
 
 
+def _hour_row(
+    *,
+    hour: int,
+    value: Decimal | None,
+    shown: str,
+    vmin: Decimal | None,
+    vmax: Decimal | None,
+    is_now: bool,
+):
+    if value is None:
+        fill = Div(cls="fill empty")
+    else:
+        fill = Div(
+            cls="fill " + _band(value, vmin, vmax),
+            style=f"width:{_pct(value, vmax)}%",
+        )
+    return Div(
+        Span(fmt_hour_range(hour), cls="hour"),
+        Div(fill, cls="track"),
+        Span(shown, cls="val"),
+        cls="row now" if is_now else "row",
+    )
+
+
 def _current_caption(now: datetime, current: db.PriceHour | None) -> str:
-    window = f"{now.hour:02d}:00–{(now.hour + 1) % 24:02d}:00"
+    window = fmt_hour_range(now.hour)
     if current is None:
         return f"No stored price for {window} today"
     return f"This hour  {window}  ·  {fmt_day(now.date())}"
@@ -417,3 +420,7 @@ def fmt_kwh(value: Decimal | float | None) -> str:
 
 def fmt_day(value: date) -> str:
     return value.strftime("%d %b %Y")
+
+
+def fmt_hour_range(hour: int) -> str:
+    return f"{hour:02d}-{hour + 1:02d}"
