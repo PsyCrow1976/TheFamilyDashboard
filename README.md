@@ -23,7 +23,7 @@ Header: **The Family Dashboard**. Three tabs, rotated every five minutes (the pa
 
 1. **Current prices** — today’s and tomorrow’s total inkl. moms, as side-by-side 24-hour charts on a computer or tablet. On a phone the two charts share one space and only one is visible; swipe sideways or use the arrows and dots to switch. Each hour is a horizontal line (`00-01` … `23-24`) with the value on the right. The bar is a green → orange → red gradient with stops at 2 kr and 4 kr. Width is 0–6 kr/kWh unless an hour is higher. The current hour is marked, and that hour’s price is shown large above the charts.
 2. **Power usage** — the latest date that has hourly usage (ElOverblik is usually a day behind). Three charts: kWh per hour (0–1 / 1–2 / 2+ kWh), that day’s hourly price (same 0–2 / 2–4 / 4+ kr stops as Current prices), and kroner spent per hour (0–1 / 1–2 / 2+ kr). On a computer or tablet they sit side by side. On a phone they stack in the same space, one visible at a time. Totals for the day sit above the charts. Previous / next day buttons at the bottom step through stored usage days.
-3. **Calendar** — today and tomorrow from one Google calendar. Set `GOOGLE_CALENDAR_ICS_URL` to that calendar’s secret iCal address (Google Calendar → Settings → the calendar → Integrate calendar). The app downloads the feed about every five minutes and keeps the latest copy in memory. Events are not written to PostgreSQL. On a phone, today and tomorrow share one space the same way the price charts do.
+3. **Calendar** — two days from one Google calendar, today and tomorrow until you move. Previous and next day buttons under the lists step one day at a time. Set `GOOGLE_CALENDAR_ICS_URL` to that calendar’s secret iCal address (Google Calendar → Settings → the calendar → Integrate calendar). The app downloads the feed about every five minutes and keeps the latest copy in memory. Events are not written to PostgreSQL. On a phone, the two days share one space the same way the price charts do. The five-minute rotation returns the calendar to today.
 
 ## Requirements
 
@@ -44,4 +44,4 @@ Unraid Docker Compose deploy is in [deploy.md](deploy.md).
 
 ## Status
 
-Version `0.0.8`. See [CHANGELOG.md](CHANGELOG.md).
+Version `0.0.9`. See [CHANGELOG.md](CHANGELOG.md).

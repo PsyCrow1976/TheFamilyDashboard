@@ -157,7 +157,7 @@ html[data-device="phone"] .deck-nav {
     var(--high) 100%); }
 .panel-prices .legend-bar { width: 12rem; }
 .day-nav { flex: 0 0 auto; display: flex; justify-content: space-between; align-items: center;
-  gap: 0.8rem; }
+  gap: 0.8rem; flex-wrap: wrap; }
 .day-nav a, .day-nav .disabled { text-decoration: none; padding: 0.4rem 0.85rem;
   border-radius: 999px; font-weight: 650; border: 1px solid var(--line); }
 .day-nav a:hover { border-color: var(--ink); }
@@ -306,11 +306,12 @@ def health() -> PlainTextResponse:
 
 
 @rt("/")
-def index(tab: str | None = None, day: str | None = None):
+def index(tab: str | None = None, day: str | None = None, date: str | None = None):
     chosen = tab if tab in {"prices", "usage", "calendar"} else "prices"
     now = datetime.now(TIMEZONE)
     today = now.date()
     tomorrow = today + timedelta(days=1)
+    calendar_start = _parse_day(date) or today
     error = None
     today_hours: list[db.PriceHour] = []
     tomorrow_hours: list[db.PriceHour] = []
@@ -330,7 +331,7 @@ def index(tab: str | None = None, day: str | None = None):
     except Exception as exc:
         error = str(exc)
 
-    agenda = calendar.load_agenda(now)
+    agenda = calendar.load_agenda(now, calendar_start)
 
     current = next(
         (
@@ -387,7 +388,7 @@ def index(tab: str | None = None, day: str | None = None):
                 _day_nav(usage_day, prev_usage, next_usage),
                 cls="panel panel-usage",
             ),
-            _calendar_panel(agenda, now, today, tomorrow),
+            _calendar_panel(agenda, now, calendar_start),
             cls="panels",
         )
     )
@@ -468,9 +469,8 @@ def _day_nav(day: date | None, prev_day: date | None, next_day: date | None):
     )
 
 
-def _calendar_panel(
-    agenda: calendar.Agenda, now: datetime, today: date, tomorrow: date
-):
+def _calendar_panel(agenda: calendar.Agenda, now: datetime, first_day: date):
+    second_day = first_day + timedelta(days=1)
     notes = []
     if agenda.stale and agenda.error:
         notes.append(
@@ -488,20 +488,51 @@ def _calendar_panel(
         *notes,
         _hero(*_calendar_focus(agenda, now)),
         Div(
-            _agenda_card("Today", today, agenda.today, now, empty),
-            _agenda_card("Tomorrow", tomorrow, agenda.tomorrow, now, empty),
+            _agenda_card(_day_heading(first_day, now.date()), first_day, agenda.first, now, empty),
+            _agenda_card(_day_heading(second_day, now.date()), second_day, agenda.second, now, empty),
             cls="pair",
         ),
+        _calendar_nav(first_day, now.date()),
         cls="panel panel-calendar",
     )
+
+
+def _calendar_nav(first_day: date, today: date):
+    second_day = first_day + timedelta(days=1)
+    return Div(
+        A("← Previous day", href=_calendar_href(first_day - timedelta(days=1), today)),
+        Span(f"{fmt_day(first_day)}  ·  {fmt_day(second_day)}", cls="current"),
+        A("Next day →", href=_calendar_href(first_day + timedelta(days=1), today)),
+        cls="day-nav",
+    )
+
+
+def _calendar_href(day: date, today: date) -> str:
+    if day == today:
+        return "/?tab=calendar"
+    return f"/?tab=calendar&date={day.isoformat()}"
+
+
+_WEEKDAYS = ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
+
+
+def _day_heading(day: date, today: date) -> str:
+    if day == today:
+        return "Today"
+    if day == today + timedelta(days=1):
+        return "Tomorrow"
+    if day == today - timedelta(days=1):
+        return "Yesterday"
+    return _WEEKDAYS[day.weekday()]
 
 
 def _calendar_focus(
     agenda: calendar.Agenda, now: datetime
 ) -> tuple[list[tuple[str, str]], str]:
+    shown = agenda.first + agenda.second
     timed = [
         event
-        for event in agenda.today + agenda.tomorrow
+        for event in shown
         if not event.all_day and event.end > now
     ]
     timed.sort(key=lambda event: (event.start, event.title.casefold()))
@@ -511,10 +542,16 @@ def _calendar_focus(
         clock = upcoming.start.astimezone(TIMEZONE).strftime("%H:%M")
         unit = "now" if upcoming.start <= now else "next"
         return [(clock, unit)], _focus_caption(upcoming, agenda, now)
-    all_day = next((event for event in agenda.today if event.all_day), None)
+    all_day = next((event for event in agenda.first if event.all_day), None)
     if all_day is not None:
         return [("All day", "")], _focus_caption(all_day, agenda, now)
-    label = agenda.calendar_name or "Today and tomorrow"
+    if shown:
+        earliest = shown[0]
+        if earliest.all_day:
+            return [("All day", "")], _focus_caption(earliest, agenda, now)
+        clock = earliest.start.astimezone(TIMEZONE).strftime("%H:%M")
+        return [(clock, "")], _focus_caption(earliest, agenda, now)
+    label = agenda.calendar_name or "Nothing planned"
     return [("—", "")], label
 
 

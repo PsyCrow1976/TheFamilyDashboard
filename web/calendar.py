@@ -29,8 +29,8 @@ class AgendaEvent:
 
 @dataclass(frozen=True)
 class Agenda:
-    today: list[AgendaEvent]
-    tomorrow: list[AgendaEvent]
+    first: list[AgendaEvent]
+    second: list[AgendaEvent]
     calendar_name: str | None
     error: str | None
     stale: bool
@@ -48,8 +48,8 @@ _cached: _CachedFeed | None = None
 _last_error: str | None = None
 
 
-def load_agenda(now: datetime) -> Agenda:
-    """Events overlapping today and tomorrow. Uses the last feed when refresh fails."""
+def load_agenda(now: datetime, first_day: date | None = None) -> Agenda:
+    """Events overlapping two days starting at first_day. Uses the last feed when refresh fails."""
     url = os.environ.get("GOOGLE_CALENDAR_ICS_URL", "").strip()
     if not url:
         return Agenda(
@@ -61,21 +61,21 @@ def load_agenda(now: datetime) -> Agenda:
             False,
         )
 
+    start = first_day or now.date()
+    following = start + timedelta(days=1)
     try:
         feed, error, stale = _feed(url, now)
         if feed is None:
             return Agenda([], [], None, error, False)
 
-        today = now.date()
-        tomorrow = today + timedelta(days=1)
-        window_start = datetime.combine(today, time.min, tzinfo=TIMEZONE)
-        window_end = datetime.combine(tomorrow + timedelta(days=1), time.min, tzinfo=TIMEZONE)
+        window_start = datetime.combine(start, time.min, tzinfo=TIMEZONE)
+        window_end = datetime.combine(following + timedelta(days=1), time.min, tzinfo=TIMEZONE)
         events = _events_overlapping(feed.calendar, window_start, window_end)
     except Exception as exc:
         return Agenda([], [], None, _safe_error(exc, url), False)
     return Agenda(
-        today=_on_day(events, today),
-        tomorrow=_on_day(events, tomorrow),
+        first=_on_day(events, start),
+        second=_on_day(events, following),
         calendar_name=feed.name,
         error=error,
         stale=stale,
