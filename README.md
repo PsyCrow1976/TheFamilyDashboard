@@ -44,4 +44,4 @@ Unraid Docker Compose deploy is in [deploy.md](deploy.md).
 
 ## Status
 
-Version `0.0.7`. See [CHANGELOG.md](CHANGELOG.md).
+Version `0.0.8`. See [CHANGELOG.md](CHANGELOG.md).

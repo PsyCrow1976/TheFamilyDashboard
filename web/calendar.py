@@ -61,15 +61,18 @@ def load_agenda(now: datetime) -> Agenda:
             False,
         )
 
-    feed, error, stale = _feed(url, now)
-    if feed is None:
-        return Agenda([], [], None, error, False)
+    try:
+        feed, error, stale = _feed(url, now)
+        if feed is None:
+            return Agenda([], [], None, error, False)
 
-    today = now.date()
-    tomorrow = today + timedelta(days=1)
-    window_start = datetime.combine(today, time.min, tzinfo=TIMEZONE)
-    window_end = datetime.combine(tomorrow + timedelta(days=1), time.min, tzinfo=TIMEZONE)
-    events = _events_overlapping(feed.calendar, window_start, window_end)
+        today = now.date()
+        tomorrow = today + timedelta(days=1)
+        window_start = datetime.combine(today, time.min, tzinfo=TIMEZONE)
+        window_end = datetime.combine(tomorrow + timedelta(days=1), time.min, tzinfo=TIMEZONE)
+        events = _events_overlapping(feed.calendar, window_start, window_end)
+    except Exception as exc:
+        return Agenda([], [], None, _safe_error(exc, url), False)
     return Agenda(
         today=_on_day(events, today),
         tomorrow=_on_day(events, tomorrow),
@@ -93,6 +96,7 @@ def _feed(url: str, now: datetime) -> tuple[_CachedFeed | None, str | None, bool
             calendar = Calendar.from_ical(payload)
             if not isinstance(calendar, Calendar):
                 raise ValueError("Calendar feed was empty")
+            calendar = _without_overflowing_events(calendar)
             _cached = _CachedFeed(
                 fetched_at=now,
                 calendar=calendar,
@@ -111,7 +115,7 @@ def _feed(url: str, now: datetime) -> tuple[_CachedFeed | None, str | None, bool
 def _download(url: str) -> bytes:
     request = urllib.request.Request(
         url,
-        headers={"User-Agent": "TheFamilyDashboard/0.0.7"},
+        headers={"User-Agent": "TheFamilyDashboard/0.0.8"},
     )
     with urllib.request.urlopen(request, timeout=REQUEST_TIMEOUT) as response:
         return response.read()
@@ -121,19 +125,24 @@ def _events_overlapping(
     calendar: Calendar, window_start: datetime, window_end: datetime
 ) -> list[AgendaEvent]:
     found: list[AgendaEvent] = []
-    for component in recurring_ical_events.of(calendar).between(window_start, window_end):
-        status = str(component.get("STATUS") or "")
-        if status.upper() == "CANCELLED":
+    series = recurring_ical_events.of(calendar, skip_bad_series=True)
+    for component in series.between(window_start, window_end):
+        try:
+            status = str(component.get("STATUS") or "")
+            if status.upper() == "CANCELLED":
+                continue
+            start_raw = component.get("DTSTART")
+            if start_raw is None or not hasattr(start_raw, "dt"):
+                continue
+            end_raw = component.get("DTEND")
+            end_dt = end_raw.dt if end_raw is not None and hasattr(end_raw, "dt") else None
+            start, end, all_day = _span(start_raw.dt, end_dt)
+            if end <= window_start or start >= window_end:
+                continue
+            title = str(component.get("SUMMARY") or "").strip() or "(No title)"
+            location = str(component.get("LOCATION") or "").strip()
+        except (OverflowError, TypeError, ValueError):
             continue
-        start_raw = component.get("DTSTART")
-        if start_raw is None:
-            continue
-        end_raw = component.get("DTEND")
-        start, end, all_day = _span(start_raw.dt, None if end_raw is None else end_raw.dt)
-        if end <= window_start or start >= window_end:
-            continue
-        title = str(component.get("SUMMARY") or "").strip() or "(No title)"
-        location = str(component.get("LOCATION") or "").strip()
         found.append(
             AgendaEvent(
                 title=title,
@@ -182,6 +191,59 @@ def _on_day(events: list[AgendaEvent], day: date) -> list[AgendaEvent]:
     chosen = [event for event in events if event.start < end and event.end > start]
     chosen.sort(key=lambda event: (0 if event.all_day else 1, event.start, event.title.casefold()))
     return chosen
+
+
+def _without_overflowing_events(calendar: Calendar) -> Calendar:
+    """Drop events whose timestamps cannot be shifted into local time.
+
+    Google sometimes stores a placeholder at 9999-12-31 23:00 UTC. Moving that
+    into Europe/Copenhagen overflows datetime and used to crash the whole page.
+    """
+    kept = []
+    dropped = False
+    for component in calendar.subcomponents:
+        if component.name == "VEVENT" and not _event_dates_fit(component):
+            dropped = True
+            continue
+        kept.append(component)
+    if not dropped:
+        return calendar
+    clone = Calendar()
+    for key, value in calendar.items():
+        clone.add(key, value)
+    for component in kept:
+        clone.add_component(component)
+    return clone
+
+
+def _event_dates_fit(component) -> bool:
+    for prop in ("DTSTART", "DTEND", "RDATE", "RECURRENCE-ID", "EXDATE"):
+        if prop not in component:
+            continue
+        value = component.get(prop)
+        raw = getattr(value, "dts", None)
+        if raw is not None:
+            instants = [item.dt for item in raw]
+        elif hasattr(value, "dt"):
+            instants = [value.dt]
+        else:
+            continue
+        for instant in instants:
+            if isinstance(instant, datetime) and not _fits_local(instant):
+                return False
+    return True
+
+
+def _fits_local(instant: datetime) -> bool:
+    if instant.year >= 9999 or instant.year < 1:
+        return False
+    if instant.tzinfo is None:
+        return True
+    try:
+        instant.astimezone(TIMEZONE)
+    except (OverflowError, OSError, ValueError):
+        return False
+    return True
 
 
 def _calendar_name(calendar: Calendar) -> str | None:

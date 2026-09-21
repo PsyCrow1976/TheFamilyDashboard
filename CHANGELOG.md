@@ -5,6 +5,12 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.0.8] - 2026-09-21
+
+### Fixed
+
+- A Google calendar that contains a placeholder event on 31 December 9999 no longer crashes the dashboard. Those events are skipped, and a calendar read that still fails is shown on the Calendar tab instead of replacing the page with an internal server error.
+
 ## [0.0.7] - 2026-09-21
 
 ### Added
