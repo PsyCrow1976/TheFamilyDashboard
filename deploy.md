@@ -66,7 +66,10 @@ POSTGRES_DB=home
 WEB_HOST=0.0.0.0
 WEB_PORT=8089
 TZ=Europe/Copenhagen
+GOOGLE_CALENDAR_ICS_URL=
 ```
+
+`GOOGLE_CALENDAR_ICS_URL` is optional. Paste the secret iCal address for the one calendar that should appear on the Calendar tab. Leave it empty to keep that tab blank. Do not commit the address.
 
 `POSTGRES_HOST` must be an address **the container** can reach:
 

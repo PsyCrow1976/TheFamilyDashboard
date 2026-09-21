@@ -5,6 +5,12 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.0.7] - 2026-09-21
+
+### Added
+
+- Calendar tab for one Google calendar. Set `GOOGLE_CALENDAR_ICS_URL` to the calendar’s secret iCal address. The feed is read about every five minutes and kept in memory. Events are not stored in PostgreSQL. Today and tomorrow are shown side by side, and the tabs rotate prices → usage → calendar.
+
 ## [0.0.6] - 2026-09-21
 
 ### Changed

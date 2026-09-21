@@ -26,7 +26,7 @@ from fasthtml.common import (
 )
 from starlette.responses import PlainTextResponse
 
-from web import db
+from web import calendar, db
 
 TIMEZONE = ZoneInfo("Europe/Copenhagen")
 TAB_MS = 5 * 60 * 1000
@@ -69,7 +69,8 @@ nav.tabs a.active { background: var(--ink); color: var(--bg); border-color: var(
 .panels { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .panel { display: none; flex: 1; min-height: 0; padding-top: 0.7rem; }
 .wrap[data-tab="prices"] .panel-prices,
-.wrap[data-tab="usage"] .panel-usage { display: flex; flex-direction: column; gap: 0.55rem; }
+.wrap[data-tab="usage"] .panel-usage,
+.wrap[data-tab="calendar"] .panel-calendar { display: flex; flex-direction: column; gap: 0.55rem; }
 .hero { flex: 0 0 auto; display: flex; flex-direction: column; gap: 0.1rem; }
 .hero .nums { display: flex; gap: 2.4rem; flex-wrap: wrap; align-items: baseline; }
 .big { font-size: clamp(1.7rem, 5.5vh, 4.2rem); font-weight: 750; line-height: 0.95;
@@ -164,6 +165,18 @@ html[data-device="phone"] .deck-nav {
 .day-nav .current { color: var(--muted); font-variant-numeric: tabular-nums; }
 .warn { flex: 0 0 auto; background: #3a2a1c; border: 1px solid #7a5a32;
   border-radius: 0.7rem; padding: 0.7rem 1rem; }
+.agenda { display: flex; flex-direction: column; gap: 0.28rem; flex: 1; min-height: 0;
+  overflow: auto; }
+.event { display: grid; grid-template-columns: 7.4rem minmax(0, 1fr); gap: 0.45rem;
+  align-items: center; padding: 0.28rem 0.4rem; border-radius: 0.4rem; }
+.event.now { background: #2c2620; outline: 1px solid var(--now); }
+.event .when-time { color: var(--muted); font-variant-numeric: tabular-nums;
+  font-size: clamp(0.72rem, 1.6vh, 0.92rem); }
+.event.now .when-time { color: var(--ink); font-weight: 650; }
+.event .what { min-width: 0; }
+.event .title { font-weight: 650; font-size: clamp(0.85rem, 1.8vh, 1.05rem);
+  overflow-wrap: anywhere; }
+.event .where { color: var(--muted); font-size: 0.82rem; overflow-wrap: anywhere; }
 """
 
 # Runs in <head> so the phone layout is set before the charts paint.
@@ -207,9 +220,11 @@ JS = f"""
       history.replaceState(null, "", "/?" + params.toString());
     }});
   }});
+  const order = ["prices", "usage", "calendar"];
   setTimeout(() => {{
-    const current = wrap && wrap.dataset.tab === "usage" ? "usage" : "prices";
-    location.assign("/?tab=" + (current === "prices" ? "usage" : "prices"));
+    const current = wrap && order.includes(wrap.dataset.tab) ? wrap.dataset.tab : "prices";
+    const next = order[(order.indexOf(current) + 1) % order.length];
+    location.assign("/?tab=" + next);
   }}, {TAB_MS});
 
   if (document.documentElement.dataset.device === "phone") {{
@@ -292,7 +307,7 @@ def health() -> PlainTextResponse:
 
 @rt("/")
 def index(tab: str | None = None, day: str | None = None):
-    chosen = "usage" if tab == "usage" else "prices"
+    chosen = tab if tab in {"prices", "usage", "calendar"} else "prices"
     now = datetime.now(TIMEZONE)
     today = now.date()
     tomorrow = today + timedelta(days=1)
@@ -314,6 +329,8 @@ def index(tab: str | None = None, day: str | None = None):
             prev_usage, next_usage = db.neighboring_usage_dates(usage_day)
     except Exception as exc:
         error = str(exc)
+
+    agenda = calendar.load_agenda(now)
 
     current = next(
         (
@@ -370,6 +387,7 @@ def index(tab: str | None = None, day: str | None = None):
                 _day_nav(usage_day, prev_usage, next_usage),
                 cls="panel panel-usage",
             ),
+            _calendar_panel(agenda, now, today, tomorrow),
             cls="panels",
         )
     )
@@ -381,6 +399,7 @@ def index(tab: str | None = None, day: str | None = None):
                 Nav(
                     _tab("prices", "Current prices", chosen),
                     _tab("usage", "Power usage", chosen),
+                    _tab("calendar", "Calendar", chosen),
                     cls="tabs",
                 ),
                 cls="top",
@@ -446,6 +465,111 @@ def _day_nav(day: date | None, prev_day: date | None, next_day: date | None):
         Span(fmt_day(day), cls="current"),
         forward,
         cls="day-nav",
+    )
+
+
+def _calendar_panel(
+    agenda: calendar.Agenda, now: datetime, today: date, tomorrow: date
+):
+    notes = []
+    if agenda.stale and agenda.error:
+        notes.append(
+            Div(
+                P(f"Showing the last calendar read. Refresh failed: {agenda.error}"),
+                cls="warn",
+            )
+        )
+    empty = (
+        agenda.error
+        if agenda.error and not agenda.stale
+        else "Nothing planned."
+    )
+    return Div(
+        *notes,
+        _hero(*_calendar_focus(agenda, now)),
+        Div(
+            _agenda_card("Today", today, agenda.today, now, empty),
+            _agenda_card("Tomorrow", tomorrow, agenda.tomorrow, now, empty),
+            cls="pair",
+        ),
+        cls="panel panel-calendar",
+    )
+
+
+def _calendar_focus(
+    agenda: calendar.Agenda, now: datetime
+) -> tuple[list[tuple[str, str]], str]:
+    timed = [
+        event
+        for event in agenda.today + agenda.tomorrow
+        if not event.all_day and event.end > now
+    ]
+    timed.sort(key=lambda event: (event.start, event.title.casefold()))
+    current = next((event for event in timed if event.start <= now), None)
+    upcoming = current or (timed[0] if timed else None)
+    if upcoming is not None:
+        clock = upcoming.start.astimezone(TIMEZONE).strftime("%H:%M")
+        unit = "now" if upcoming.start <= now else "next"
+        return [(clock, unit)], _focus_caption(upcoming, agenda, now)
+    all_day = next((event for event in agenda.today if event.all_day), None)
+    if all_day is not None:
+        return [("All day", "")], _focus_caption(all_day, agenda, now)
+    label = agenda.calendar_name or "Today and tomorrow"
+    return [("—", "")], label
+
+
+def _focus_caption(event: calendar.AgendaEvent, agenda: calendar.Agenda, now: datetime) -> str:
+    parts = [event.title, _event_day_label(event, now)]
+    if not event.all_day:
+        parts.append(f"until {event.end.astimezone(TIMEZONE).strftime('%H:%M')}")
+    if event.location:
+        parts.append(event.location)
+    if agenda.calendar_name:
+        parts.append(agenda.calendar_name)
+    return "  ·  ".join(parts)
+
+
+def _event_day_label(event: calendar.AgendaEvent, now: datetime) -> str:
+    start_day = event.start.astimezone(TIMEZONE).date()
+    if start_day == now.date():
+        return "Today"
+    if start_day == now.date() + timedelta(days=1):
+        return "Tomorrow"
+    return fmt_day(start_day)
+
+
+def _agenda_card(
+    title: str,
+    day: date,
+    events: list[calendar.AgendaEvent],
+    now: datetime,
+    empty: str,
+):
+    if not events:
+        return Div(
+            Div(title, cls="card-title"),
+            P(fmt_day(day), cls="when"),
+            P(empty, cls="empty-msg"),
+            cls="card",
+        )
+    rows = [_event_row(event, now) for event in events]
+    return Div(
+        Div(title, cls="card-title"),
+        P(fmt_day(day), cls="when"),
+        Div(*rows, cls="agenda"),
+        cls="card",
+    )
+
+
+def _event_row(event: calendar.AgendaEvent, now: datetime):
+    happening = (not event.all_day) and event.start <= now < event.end
+    detail = [Div(event.title, cls="title")]
+    if event.location:
+        detail.append(Div(event.location, cls="where"))
+    return Div(
+        Span(fmt_event_time(event), cls="when-time"),
+        Div(*detail, cls="what"),
+        cls="event now" if happening else "event",
     )
 
 
@@ -640,3 +764,11 @@ def fmt_day(value: date) -> str:
 
 def fmt_hour_range(hour: int) -> str:
     return f"{hour:02d}-{hour + 1:02d}"
+
+
+def fmt_event_time(event: calendar.AgendaEvent) -> str:
+    if event.all_day:
+        return "All day"
+    start = event.start.astimezone(TIMEZONE)
+    end = event.end.astimezone(TIMEZONE)
+    return f"{start:%H:%M}–{end:%H:%M}"
