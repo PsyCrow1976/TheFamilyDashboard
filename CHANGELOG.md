@@ -5,6 +5,12 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.0.6] - 2026-09-21
+
+### Changed
+
+- Phones show one chart at a time, stacked in the same space. Swipe sideways, or use the arrows and dots, to move between today and tomorrow on Current prices, and between usage, price, and spent on Power usage. Computers and tablets keep the charts side by side.
+
 ## [0.0.5] - 2026-09-18
 
 ### Changed

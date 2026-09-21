@@ -79,9 +79,46 @@ nav.tabs a.active { background: var(--ink); color: var(--bg); border-color: var(
 .sub { color: var(--muted); margin: 0.15rem 0 0; font-size: clamp(0.85rem, 1.6vh, 1.05rem); }
 .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 0.8rem; flex: 1; min-height: 0; }
 .trio { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.7rem; flex: 1; min-height: 0; }
-@media (max-width: 800px) {
-  .pair, .trio { grid-template-columns: 1fr; }
+/* Phones only. Tablets use the same side-by-side grid as computers. */
+html[data-device="phone"] .pair,
+html[data-device="phone"] .trio {
+  grid-template-columns: 1fr;
+  grid-template-rows: minmax(0, 1fr) auto;
+  gap: 0.4rem;
+  touch-action: pan-y;
 }
+html[data-device="phone"] .pair > .card,
+html[data-device="phone"] .trio > .card {
+  grid-area: 1 / 1;
+  visibility: hidden;
+  pointer-events: none;
+}
+html[data-device="phone"] .pair > .card.is-front,
+html[data-device="phone"] .trio > .card.is-front,
+html[data-device="phone"] .pair:not(:has(.is-front)) > .card:first-child,
+html[data-device="phone"] .trio:not(:has(.is-front)) > .card:first-child {
+  visibility: visible;
+  pointer-events: auto;
+}
+.deck-nav { display: none; }
+html[data-device="phone"] .deck-nav {
+  grid-row: 2; grid-column: 1;
+  display: flex; justify-content: center; align-items: center; gap: 0.75rem;
+  z-index: 1;
+}
+.deck-btn, .deck-dot {
+  appearance: none; background: transparent; color: var(--ink); cursor: pointer;
+}
+.deck-btn {
+  width: 2.4rem; height: 2.4rem; border-radius: 999px;
+  border: 1px solid var(--line); font-size: 1.4rem; line-height: 1;
+}
+.deck-dots { display: flex; gap: 0.45rem; align-items: center; }
+.deck-dot {
+  width: 0.7rem; height: 0.7rem; padding: 0; border-radius: 999px;
+  border: 1px solid var(--muted);
+}
+.deck-dot.active { background: var(--ink); border-color: var(--ink); }
 .card { background: var(--panel); border: 1px solid var(--line); border-radius: 1rem;
   padding: 0.55rem 0.7rem 0.5rem; display: flex; flex-direction: column; min-height: 0; }
 .card-title { flex: 0 0 auto; font-weight: 650; }
@@ -129,6 +166,29 @@ nav.tabs a.active { background: var(--ink); color: var(--bg); border-color: var(
   border-radius: 0.7rem; padding: 0.7rem 1rem; }
 """
 
+# Runs in <head> so the phone layout is set before the charts paint.
+DETECT_JS = """
+(() => {
+  const ua = navigator.userAgent || "";
+  const touch = (navigator.maxTouchPoints || 0) > 0;
+  const shortSide = Math.min(screen.width || 0, screen.height || 0);
+  const iPad = /iPad/.test(ua)
+    || ((/Macintosh/.test(ua) || navigator.platform === "MacIntel") && touch && shortSide >= 700);
+  const androidTablet = /Android/i.test(ua) && !/Mobile/i.test(ua);
+  const tabletHint = /Tablet|PlayBook|Silk/i.test(ua);
+  let device = "desktop";
+  if (iPad || androidTablet || tabletHint) device = "tablet";
+  else if (
+    /iPhone|iPod|Windows Phone|IEMobile|BlackBerry|Opera Mini/i.test(ua)
+    || (/Android/i.test(ua) && /Mobile/i.test(ua))
+    || (navigator.userAgentData && navigator.userAgentData.mobile === true && shortSide > 0 && shortSide < 700)
+    || (touch && shortSide > 0 && shortSide < 700)
+  ) device = "phone";
+  else if (touch && shortSide >= 700 && shortSide < 1200) device = "tablet";
+  document.documentElement.dataset.device = device;
+})();
+"""
+
 JS = f"""
 (() => {{
   const wrap = document.querySelector(".wrap");
@@ -151,6 +211,69 @@ JS = f"""
     const current = wrap && wrap.dataset.tab === "usage" ? "usage" : "prices";
     location.assign("/?tab=" + (current === "prices" ? "usage" : "prices"));
   }}, {TAB_MS});
+
+  if (document.documentElement.dataset.device === "phone") {{
+    document.querySelectorAll(".pair, .trio").forEach((deck) => {{
+      const cards = Array.from(deck.children).filter((node) => node.classList.contains("card"));
+      if (cards.length < 2) return;
+      const nav = document.createElement("div");
+      nav.className = "deck-nav";
+      const prev = document.createElement("button");
+      prev.type = "button";
+      prev.className = "deck-btn";
+      prev.setAttribute("aria-label", "Previous chart");
+      prev.textContent = "‹";
+      const dots = document.createElement("div");
+      dots.className = "deck-dots";
+      const next = document.createElement("button");
+      next.type = "button";
+      next.className = "deck-btn";
+      next.setAttribute("aria-label", "Next chart");
+      next.textContent = "›";
+      const dotButtons = cards.map((card, i) => {{
+        const dot = document.createElement("button");
+        dot.type = "button";
+        dot.className = "deck-dot";
+        const title = card.querySelector(".card-title");
+        dot.setAttribute("aria-label", title ? title.textContent : ("Chart " + (i + 1)));
+        dots.appendChild(dot);
+        return dot;
+      }});
+      nav.append(prev, dots, next);
+      deck.appendChild(nav);
+      let index = 0;
+      let startX = 0;
+      let startY = 0;
+      let tracking = false;
+      const show = (nextIndex) => {{
+        index = (nextIndex + cards.length) % cards.length;
+        cards.forEach((card, i) => card.classList.toggle("is-front", i === index));
+        dotButtons.forEach((dot, i) => {{
+          dot.classList.toggle("active", i === index);
+          dot.setAttribute("aria-current", i === index ? "true" : "false");
+        }});
+      }};
+      prev.addEventListener("click", () => show(index - 1));
+      next.addEventListener("click", () => show(index + 1));
+      dotButtons.forEach((dot, i) => dot.addEventListener("click", () => show(i)));
+      deck.addEventListener("pointerdown", (event) => {{
+        if (event.target.closest(".deck-nav")) return;
+        tracking = true;
+        startX = event.clientX;
+        startY = event.clientY;
+      }});
+      deck.addEventListener("pointerup", (event) => {{
+        if (!tracking) return;
+        tracking = false;
+        const dx = event.clientX - startX;
+        const dy = event.clientY - startY;
+        if (Math.abs(dx) < 40 || Math.abs(dx) < Math.abs(dy)) return;
+        show(index + (dx < 0 ? 1 : -1));
+      }});
+      deck.addEventListener("pointercancel", () => {{ tracking = false; }});
+      show(0);
+    }});
+  }}
 }})();
 """
 
@@ -158,7 +281,7 @@ JS = f"""
 app, rt = fast_app(
     title="The Family Dashboard",
     pico=False,
-    hdrs=(Style(CSS),),
+    hdrs=(Style(CSS), Script(DETECT_JS)),
 )
 
 
